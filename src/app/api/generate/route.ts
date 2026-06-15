@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -28,7 +28,7 @@ async function processTask(taskId: string, prompt: string, model: string, count:
     const promises = Array.from({ length: count }, () =>
       fetch(API_URL, {
         method: 'POST',
-        headers: { 'Authorization': '***' + apiKey, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, model, width, height }),
       })
     );
