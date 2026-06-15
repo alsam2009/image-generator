@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -18,7 +18,7 @@ function generateId() {
   return Math.random().toString(36).substring(2, 15);
 }
 
-async function processTask(taskId, prompt, model, count, width, height) {
+async function processTask(taskId: string, prompt: string, model: string, count: number, width: number, height: number) {
   const task = tasks.get(taskId);
   if (!task) return;
   task.status = 'processing';
@@ -64,7 +64,7 @@ async function processTask(taskId, prompt, model, count, width, height) {
   }
 }
 
-export async function POST(request) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const prompt = body.prompt;
@@ -84,7 +84,7 @@ export async function POST(request) {
   }
 }
 
-export async function GET(request) {
+export async function GET(request: NextRequest) {
   const taskId = request.nextUrl.searchParams.get('taskId');
   if (!taskId) return NextResponse.json({ error: 'taskId required' }, { status: 400 });
   const task = tasks.get(taskId);
