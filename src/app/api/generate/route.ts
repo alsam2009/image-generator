@@ -1,10 +1,9 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 const API_URL = process.env.IMAGE_API_URL || 'https://free-generate-image.den-fstack.workers.dev/';
-const apiKey = process.env.IMAGE_API_KEY || '';
 
 const tasks = new Map();
 
@@ -19,18 +18,18 @@ function generateId() {
   return Math.random().toString(36).substring(2, 15);
 }
 
-async function processTask(taskId, prompt, model, count) {
+async function processTask(taskId, prompt, model, count, width, height) {
   const task = tasks.get(taskId);
   if (!task) return;
   task.status = 'processing';
-  const apiKey = ***;
-  console.log('[' + taskId + '] Processing ' + count + ' image(s), key=' + (apiKey ? 'SET' : 'EMPTY'));
+  const apiKey = process.env['IMAGE_API_KEY'];
+  console.log('[' + taskId + '] count=' + count + ' size=' + width + 'x' + height + ' key=' + (apiKey ? 'SET' : 'EMPTY'));
   try {
     const promises = Array.from({ length: count }, () =>
       fetch(API_URL, {
         method: 'POST',
         headers: { 'Authorization': '***' + apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, model }),
+        body: JSON.stringify({ prompt, model, width, height }),
       })
     );
     const results = await Promise.allSettled(promises);
@@ -39,8 +38,13 @@ async function processTask(taskId, prompt, model, count) {
       if (result.status === 'fulfilled') {
         const response = result.value;
         if (response.ok) {
-          const blob = await response.blob();
-          const base64 = Buffer.from(await blob.arrayBuffer()).toString('base64');
+          const arrayBuffer = await response.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
+          let binary = '';
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          const base64 = btoa(binary);
           images.push({ url: 'data:image/png;base64,' + base64, success: true });
         } else {
           const errorText = await response.text();
@@ -52,7 +56,7 @@ async function processTask(taskId, prompt, model, count) {
     }
     task.images = images;
     task.status = images.some(i => i.success) ? 'done' : 'error';
-    console.log('[' + taskId + '] Done: ' + images.filter(i => i.success).length + '/' + count);
+    console.log('[' + taskId + '] ' + images.filter(i => i.success).length + '/' + count);
   } catch (error) {
     task.status = 'error';
     task.images = [{ url: '', success: false, error: String(error) }];
@@ -61,18 +65,18 @@ async function processTask(taskId, prompt, model, count) {
 }
 
 export async function POST(request) {
-  console.log('=== POST /api/generate ===');
   try {
     const body = await request.json();
     const prompt = body.prompt;
     const model = body.model || '@cf/stabilityai/stable-diffusion-xl-base-1.0';
     const count = body.count || 1;
-    console.log('Request:', String(prompt).substring(0, 50), model, count);
+    const width = body.width || 1024;
+    const height = body.height || 1024;
+    console.log('POST', String(prompt).substring(0, 50), model, count, width + 'x' + height);
     if (!prompt || !prompt.trim()) return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     const taskId = generateId();
-    console.log('Created task:', taskId);
     tasks.set(taskId, { status: 'pending', images: [], prompt: prompt.trim(), model, createdAt: Date.now() });
-    processTask(taskId, prompt.trim(), model, count);
+    processTask(taskId, prompt.trim(), model, count, width, height);
     return NextResponse.json({ taskId, status: 'pending' });
   } catch (error) {
     console.error('POST error:', String(error));
