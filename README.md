@@ -1,36 +1,94 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Image Generator
 
-## Getting Started
+Modern AI image generation web app built with NextJS, powered by Cloudflare Workers AI.
 
-First, run the development server:
+![Preview](https://img.shields.io/badge/Next.js-14-blue)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)
+![TailwindCSS](https://img.shields.io/badge/Tailwind-3.x-38B2AC)
+
+## Features
+
+- 🖼️ Generate 1-4 images simultaneously
+- 🎨 Choose from 4 AI models (SDXL, FLUX, Lightning, DreamShaper)
+- 🔄 Regenerate with one click
+- ⬇️ Download generated images
+- 🌙 Dark theme with glass-morphism design
+- 📱 Fully responsive
+
+## Setup
+
+### Prerequisites
+
+- Node.js 18+
+- npm or yarn
+- Cloudflare Workers AI API key
+
+### Installation
 
 ```bash
+# Clone the repo
+git clone https://github.com/ZOO-Corp/image-generator.git
+cd image-generator
+
+# Install dependencies
+npm install
+
+# Create .env file
+cp .env.example .env
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Create a `.env` file in the root directory:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```env
+# Cloudflare Workers AI Image Generation API
+IMAGE_API_URL=https://your-worker.your-subdomain.workers.dev/
+IMAGE_API_KEY=your-api-key-here
+```
 
-## Learn More
+### Deploy to Vercel
 
-To learn more about Next.js, take a look at the following resources:
+1. Push to GitHub
+2. Import repository on [vercel.com](https://vercel.com)
+3. Add environment variables in Vercel dashboard:
+   - `IMAGE_API_URL`  
+   - `IMAGE_API_KEY`
+4. Click Deploy
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## API
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### POST /api/generate
 
-## Deploy on Vercel
+Generate images from text prompt.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```json
+{
+  "prompt": "A futuristic city at sunset",
+  "model": "@cf/black-forest-labs/flux-1-schnell",
+  "count": 1
+}
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Available Models
+
+| Model | Speed | Quality |
+|-------|-------|---------|
+| SDXL Base 1.0 | Medium | High |
+| FLUX.1 Schnell | Fast | High |
+| SDXL Lightning | Very Fast | Medium |
+| DreamShaper 8 | Fast | Medium |
+
+## Tech Stack
+
+- [Next.js 14](https://nextjs.org/) - React framework
+- [TypeScript](https://www.typescriptlang.org/) - Type safety
+- [TailwindCSS](https://tailwindcss.com/) - Styling
+- [Cloudflare Workers AI](https://developers.cloudflare.com/workers-ai/) - Image generation
+
+## License
+
+MIT

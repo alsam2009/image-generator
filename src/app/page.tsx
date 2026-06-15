@@ -1,65 +1,364 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useCallback, useEffect, useRef } from 'react';
+
+interface Model {
+  id: string;
+  name: string;
+  description: string;
+  speed: string;
+  quality: string;
+}
+
+interface GeneratedImage {
+  url: string;
+  prompt: string;
+  model: string;
+  loading: boolean;
+  error: string | null;
+}
+
+const AVAILABLE_MODELS: Model[] = [
+  { id: '@cf/stabilityai/stable-diffusion-xl-base-1.0', name: 'SDXL Base 1.0', description: 'Stable Diffusion XL — высокое качество', speed: 'Medium', quality: 'High' },
+  { id: '@cf/black-forest-labs/flux-1-schnell', name: 'FLUX.1 Schnell', description: 'FLUX — быстрая генерация', speed: 'Fast', quality: 'High' },
+  { id: '@cf/bytedance/stable-diffusion-xl-lightning', name: 'SDXL Lightning', description: 'Молниеносная генерация', speed: 'Very Fast', quality: 'Medium' },
+  { id: '@cf/lykon/dreamshaper-8-lcm', name: 'DreamShaper 8', description: 'Художественный стиль', speed: 'Fast', quality: 'Medium' },
+];
 
 export default function Home() {
+  const [prompt, setPrompt] = useState('');
+  const [model, setModel] = useState(AVAILABLE_MODELS[1].id);
+  const [count, setCount] = useState(1);
+  const [images, setImages] = useState<GeneratedImage[]>([]);
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const [globalError, setGlobalError] = useState<string | null>(null);
+  const [taskStatus, setTaskStatus] = useState<string | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const taskIdRef = useRef<string | null>(null);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
+
+  const pollTask = useCallback(async (taskId: string) => {
+    console.log(`Polling task ${taskId}...`);
+
+    try {
+      const res = await fetch(`/api/generate?taskId=${taskId}`);
+      const data = await res.json();
+
+      console.log('Poll result:', data.status, data.images?.length);
+
+      if (data.status === 'done' || data.status === 'error') {
+        // Stop polling
+        if (pollingRef.current) {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+        }
+
+        const newImages: GeneratedImage[] = data.images.map((img: { url: string; success: boolean; error?: string }) => ({
+          url: img.url,
+          prompt: data.prompt,
+          model: data.model,
+          loading: false,
+          error: img.success ? null : (img.error || 'Failed'),
+        }));
+
+        setImages(newImages);
+        setGlobalLoading(false);
+        setTaskStatus(null);
+
+        const successCount = newImages.filter(i => !i.error).length;
+        if (successCount === 0) {
+          setGlobalError('All generations failed');
+        }
+      } else {
+        setTaskStatus(`${data.status}...`);
+      }
+    } catch (err) {
+      console.error('Poll error:', err);
+    }
+  }, []);
+
+  const generate = useCallback(async () => {
+    if (!prompt.trim()) {
+      setGlobalError('Please enter a prompt');
+      return;
+    }
+
+    // Stop any existing polling
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+
+    setGlobalLoading(true);
+    setGlobalError(null);
+    setTaskStatus('pending...');
+
+    // Initialize loading state
+    const initialImages: GeneratedImage[] = Array.from({ length: count }, () => ({
+      url: '',
+      prompt: prompt.trim(),
+      model,
+      loading: true,
+      error: null,
+    }));
+    setImages(initialImages);
+
+    try {
+      console.log('Frontend: POST /api/generate');
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: prompt.trim(), model, count }),
+      });
+
+      console.log('Frontend: response status:', response.status);
+      const data = await response.json();
+      console.log('Frontend:', JSON.stringify(data).substring(0, 200));
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Generation failed');
+      }
+
+      const taskId = data.taskId;
+      taskIdRef.current = taskId;
+      console.log('Frontend: taskId =', taskId);
+
+      // Start polling every 2 seconds
+      pollingRef.current = setInterval(() => {
+        pollTask(taskId);
+      }, 2000);
+
+      // Also poll immediately
+      setTimeout(() => pollTask(taskId), 500);
+
+    } catch (err) {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+      setGlobalError(err instanceof Error ? err.message : 'Unknown error');
+      setGlobalLoading(false);
+      setTaskStatus(null);
+      setImages([]);
+    }
+  }, [prompt, model, count, pollTask]);
+
+  const regenerate = useCallback(() => {
+    generate();
+  }, [generate]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      generate();
+    }
+  };
+
+  const loadingCount = images.filter(i => i.loading).length;
+  const successCount = images.filter(i => !i.loading && !i.error).length;
+  const errorCount = images.filter(i => i.error).length;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen flex flex-col">
+      {/* Header */}
+      <header className="glass sticky top-0 z-50 px-6 py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <h1 className="text-2xl font-bold gradient-text">AI Image Generator</h1>
+          <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+            <span className="inline-block w-2 h-2 rounded-full bg-[var(--green)] animate-pulse"></span>
+            Powered by Cloudflare Workers AI
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+      </header>
+
+      {/* Main */}
+      <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-8">
+        {/* Input Section */}
+        <div className="glass rounded-2xl p-6 mb-8 animate-fadeInUp">
+          {/* Prompt */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
+              Describe your image
+            </label>
+            <textarea
+              value={prompt}
+              onChange={e => setPrompt(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="A futuristic city at sunset, flying cars, neon lights, cyberpunk style..."
+              className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--purple)] resize-none transition-colors"
+              rows={3}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          </div>
+
+          {/* Controls Row */}
+          <div className="flex flex-wrap gap-4 items-end">
+            {/* Model Selector */}
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
+                Model
+              </label>
+              <select
+                value={model}
+                onChange={e => setModel(e.target.value)}
+                className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text)] focus:outline-none focus:border-[var(--purple)] transition-colors cursor-pointer"
+              >
+                {AVAILABLE_MODELS.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Count Selector */}
+            <div className="min-w-[140px]">
+              <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
+                Count
+              </label>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setCount(n)}
+                    className={`w-12 h-12 rounded-xl font-bold text-lg transition-all ${
+                      count === n
+                        ? 'bg-[var(--gradient)] text-white shadow-lg shadow-purple-500/30'
+                        : 'bg-[var(--bg)] border border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--purple)]'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Generate Button */}
+            <button
+              onClick={generate}
+              disabled={globalLoading || !prompt.trim()}
+              className="px-8 py-3 bg-[var(--gradient)] text-white font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 min-w-[160px]"
+            >
+              {globalLoading ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                  {taskStatus || 'Generating...'}
+                </span>
+              ) : (
+                '✨ Generate'
+              )}
+            </button>
+          </div>
+
+          {/* Error */}
+          {globalError && (
+            <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+              ⚠️ {globalError}
+            </div>
+          )}
         </div>
+
+        {/* Results */}
+        {images.length > 0 && (
+          <div className="animate-fadeInUp">
+            {/* Result Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-[var(--text)]">
+                  {globalLoading ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-[var(--purple)] border-t-transparent rounded-full animate-spin"></span>
+                      Generating {count} image{count !== 1 ? 's' : ''}... {taskStatus}
+                    </span>
+                  ) : (
+                    <>
+                      {successCount > 0 && `${successCount} image${successCount !== 1 ? 's' : ''} generated`}
+                      {errorCount > 0 && `, ${errorCount} failed`}
+                    </>
+                  )}
+                </h2>
+                {images[0]?.prompt && (
+                  <p className="text-sm text-[var(--text-muted)]">
+                    &ldquo;{images[0].prompt}&rdquo; — {AVAILABLE_MODELS.find(m => m.id === model)?.name}
+                  </p>
+                )}
+              </div>
+              {!globalLoading && (
+                <button
+                  onClick={regenerate}
+                  className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl text-[var(--text)] hover:border-[var(--purple)] transition-colors text-sm flex items-center gap-2"
+                >
+                  🔄 Regenerate
+                </button>
+              )}
+            </div>
+
+            {/* Image Grid */}
+            <div className={`grid gap-4 ${
+              images.length === 1 ? 'grid-cols-1 max-w-2xl' :
+              images.length === 2 ? 'grid-cols-1 md:grid-cols-2' :
+              images.length === 3 ? 'grid-cols-1 md:grid-cols-3' :
+              'grid-cols-1 md:grid-cols-2'
+            }`}>
+              {images.map((img, idx) => (
+                <div key={idx} className="glass rounded-2xl overflow-hidden group">
+                  {img.loading ? (
+                    <div className="aspect-square flex flex-col items-center justify-center p-8">
+                      <div className="w-12 h-12 border-3 border-[var(--purple)] border-t-transparent rounded-full animate-spin mb-4"></div>
+                      <p className="text-[var(--text-muted)] text-sm">Generating image {idx + 1}...</p>
+                    </div>
+                  ) : img.error ? (
+                    <div className="aspect-square flex flex-col items-center justify-center p-8 text-center">
+                      <p className="text-4xl mb-2">😵</p>
+                      <p className="text-red-400 text-sm">{img.error}</p>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <img
+                        src={img.url}
+                        alt={`Generated ${idx + 1}`}
+                        className="w-full h-auto object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                        <a
+                          href={img.url}
+                          download={`generated-${idx + 1}.png`}
+                          className="px-4 py-2 bg-[var(--gradient)] text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
+                        >
+                          ⬇️ Download
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {images.length === 0 && !globalLoading && (
+          <div className="text-center py-20">
+            <div className="text-6xl mb-4">🎨</div>
+            <h2 className="text-2xl font-bold text-[var(--text)] mb-2">
+              Create stunning images with AI
+            </h2>
+            <p className="text-[var(--text-muted)] max-w-md mx-auto">
+              Describe what you want to see, choose a model, and generate beautiful images in seconds.
+            </p>
+          </div>
+        )}
       </main>
+
+      {/* Footer */}
+      <footer className="glass px-6 py-4 text-center text-sm text-[var(--text-muted)]">
+        AI Image Generator — Powered by Cloudflare Workers AI
+      </footer>
     </div>
   );
 }
