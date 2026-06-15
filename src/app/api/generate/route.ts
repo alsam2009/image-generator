@@ -33,7 +33,7 @@ async function processTask(taskId: string, prompt: string, model: string, count:
       })
     );
     const results = await Promise.allSettled(promises);
-    const images = [];
+    const images: { url: string; success: boolean; error?: string }[] = [];
     for (const result of results) {
       if (result.status === 'fulfilled') {
         const response = result.value;
