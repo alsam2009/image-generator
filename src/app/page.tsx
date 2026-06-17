@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface Model {
   id: string;
@@ -18,15 +18,31 @@ interface GeneratedImage {
   error: string | null;
 }
 
-const API_URL = 'https://free-generate-image.den-fstack.workers.dev/';
-const API_KEY = 'sk-a7e45c01313481522cf4dffe2c131980';
-
+// УДАЛИ API_KEY ОТСЮДА! Он должен быть только на бекенде
 const AVAILABLE_MODELS: Model[] = [
   { id: '@cf/stabilityai/stable-diffusion-xl-base-1.0', name: 'SDXL Base 1.0', description: 'Stable Diffusion XL — высокое качество', speed: 'Medium', quality: 'High' },
   { id: '@cf/black-forest-labs/flux-1-schnell', name: 'FLUX.1 Schnell', description: 'FLUX — быстрая генерация', speed: 'Fast', quality: 'High' },
   { id: '@cf/bytedance/stable-diffusion-xl-lightning', name: 'SDXL Lightning', description: 'Молниеносная генерация', speed: 'Very Fast', quality: 'Medium' },
   { id: '@cf/lykon/dreamshaper-8-lcm', name: 'DreamShaper 8', description: 'Художественный стиль', speed: 'Fast', quality: 'Medium' },
 ];
+
+// Типы для ответа от нашего бекенда
+interface TaskResponse {
+  taskId: string;
+  status: 'pending' | 'processing' | 'done' | 'error';
+}
+
+interface TaskStatusResponse {
+  taskId: string;
+  status: 'pending' | 'processing' | 'done' | 'error';
+  images: Array<{
+    url: string;
+    success: boolean;
+    error?: string;
+  }>;
+  prompt: string;
+  model: string;
+}
 
 export default function Home() {
   const [prompt, setPrompt] = useState('');
@@ -38,13 +54,61 @@ export default function Home() {
   const [globalLoading, setGlobalLoading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [taskStatus, setTaskStatus] = useState<string | null>(null);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (abortRef.current) abortRef.current.abort();
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
+  }, []);
+
+  // Функция для опроса статуса задачи
+  const pollTaskStatus = useCallback(async (id: string) => {
+    try {
+      const response = await fetch(`/api/generate?taskId=${id}`);
+      if (!response.ok) {
+        throw new Error(`Failed to get task status: ${response.status}`);
+      }
+
+      const data: TaskStatusResponse = await response.json();
+      console.log('Task status:', data.status);
+
+      if (data.status === 'done' || data.status === 'error') {
+        // Задача завершена
+        clearInterval(pollIntervalRef.current!);
+        pollIntervalRef.current = null;
+
+        setGlobalLoading(false);
+        setTaskStatus(null);
+        setTaskId(null);
+
+        // Обновляем изображения
+        const newImages: GeneratedImage[] = data.images.map((img) => ({
+          url: img.success ? img.url : '',
+          prompt: data.prompt,
+          model: data.model,
+          loading: false,
+          error: img.success ? null : (img.error || 'Unknown error'),
+        }));
+
+        setImages(newImages);
+
+        const successCount = newImages.filter(i => !i.error).length;
+        if (successCount === 0) {
+          setGlobalError('All generations failed');
+        }
+      } else if (data.status === 'processing') {
+        // Обновляем статус
+        setTaskStatus('processing...');
+      }
+    } catch (error) {
+      console.error('Polling error:', error);
+      // Не останавливаем polling при ошибке, продолжаем попытки
+    }
   }, []);
 
   const generate = useCallback(async () => {
@@ -53,15 +117,18 @@ export default function Home() {
       return;
     }
 
-    // Cancel any in-flight requests
-    if (abortRef.current) abortRef.current.abort();
-    abortRef.current = new AbortController();
+    // Очищаем предыдущие интервалы
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
 
     setGlobalLoading(true);
     setGlobalError(null);
-    setTaskStatus('generating...');
+    setTaskStatus('submitting...');
+    setTaskId(null);
 
-    // Initialize loading state
+    // Инициализируем состояние загрузки
     const initialImages: GeneratedImage[] = Array.from({ length: count }, () => ({
       url: '',
       prompt: prompt.trim(),
@@ -72,81 +139,61 @@ export default function Home() {
     setImages(initialImages);
 
     try {
-      console.log('Frontend: generating', count, 'image(s) directly via', API_URL);
-
-      // Fire all requests in parallel directly from browser
-      const promises = Array.from({ length: count }, () =>
-        fetch(API_URL, {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer ' + API_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ prompt: prompt.trim(), model, width, height }),
-          signal: abortRef.current!.signal,
-        }).then(async (res) => {
-          if (!res.ok) {
-            const text = await res.text();
-            throw new Error('API ' + res.status + ': ' + text);
-          }
-          const blob = await res.blob();
-          return URL.createObjectURL(blob);
-        })
-      );
-
-      const results = await Promise.allSettled(promises);
-
-      const newImages: GeneratedImage[] = results.map((result) => {
-        if (result.status === 'fulfilled') {
-          return {
-            url: result.value,
-            prompt: prompt.trim(),
-            model,
-            loading: false,
-            error: null,
-          };
-        } else {
-          return {
-            url: '',
-            prompt: prompt.trim(),
-            model,
-            loading: false,
-            error: result.reason?.message || 'Failed',
-          };
-        }
+      // Отправляем запрос на наш бекенд
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: prompt.trim(),
+          model,
+          count,
+          width,
+          height,
+        }),
       });
 
-      setImages(newImages);
-      setGlobalLoading(false);
-      setTaskStatus(null);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Server error: ${response.status}`);
+      }
 
-      const successCount = newImages.filter(i => !i.error).length;
-      if (successCount === 0) {
-        setGlobalError('All generations failed');
-      }
+      const data: TaskResponse = await response.json();
+      console.log('Task created:', data.taskId);
+
+      setTaskId(data.taskId);
+      setTaskStatus('processing...');
+
+      // Начинаем опрос статуса
+      pollIntervalRef.current = setInterval(() => {
+        pollTaskStatus(data.taskId);
+      }, 2000);
+
+      // Первый опрос сразу
+      setTimeout(() => pollTaskStatus(data.taskId), 500);
+
     } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        console.log('Request aborted');
-        return;
-      }
+      console.error('Generation error:', err);
       setGlobalError(err instanceof Error ? err.message : 'Unknown error');
       setGlobalLoading(false);
       setTaskStatus(null);
       setImages([]);
     }
-  }, [prompt, model, count, width, height]);
+  }, [prompt, model, count, width, height, pollTaskStatus]);
 
   const regenerate = useCallback(() => {
     generate();
   }, [generate]);
 
   const cancel = useCallback(() => {
-    if (abortRef.current) {
-      abortRef.current.abort();
-      abortRef.current = null;
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
     }
     setGlobalLoading(false);
     setTaskStatus(null);
+    setTaskId(null);
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -279,6 +326,14 @@ export default function Home() {
             )}
           </div>
 
+          {/* Status */}
+          {taskStatus && (
+            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl text-blue-400 text-sm flex items-center gap-2">
+              <span className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
+              {taskStatus} {taskId && `(Task: ${taskId})`}
+            </div>
+          )}
+
           {/* Error */}
           {globalError && (
             <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
@@ -297,7 +352,7 @@ export default function Home() {
                   {globalLoading ? (
                     <span className="flex items-center gap-2">
                       <span className="w-4 h-4 border-2 border-[var(--purple)] border-t-transparent rounded-full animate-spin"></span>
-                      Generating {count} image{count !== 1 ? 's' : ''}... {taskStatus}
+                      Generating {count} image{count !== 1 ? 's' : ''}...
                     </span>
                   ) : (
                     <>
@@ -312,7 +367,7 @@ export default function Home() {
                   </p>
                 )}
               </div>
-              {!globalLoading && (
+              {!globalLoading && successCount > 0 && (
                 <button
                   onClick={regenerate}
                   className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl text-[var(--text)] hover:border-[var(--purple)] transition-colors text-sm flex items-center gap-2"
@@ -347,6 +402,10 @@ export default function Home() {
                         src={img.url}
                         alt={`Generated ${idx + 1}`}
                         className="w-full h-auto object-cover"
+                        onError={(e) => {
+                          console.error('Image failed to load:', img.url);
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
                       />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                         <a
