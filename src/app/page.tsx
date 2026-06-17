@@ -18,6 +18,9 @@ interface GeneratedImage {
   error: string | null;
 }
 
+const API_URL = 'https://free-generate-image.den-fstack.workers.dev/';
+const API_KEY = 'sk-a7e45c01313481522cf4dffe2c131980';
+
 const AVAILABLE_MODELS: Model[] = [
   { id: '@cf/stabilityai/stable-diffusion-xl-base-1.0', name: 'SDXL Base 1.0', description: 'Stable Diffusion XL — высокое качество', speed: 'Medium', quality: 'High' },
   { id: '@cf/black-forest-labs/flux-1-schnell', name: 'FLUX.1 Schnell', description: 'FLUX — быстрая генерация', speed: 'Fast', quality: 'High' },
@@ -35,54 +38,13 @@ export default function Home() {
   const [globalLoading, setGlobalLoading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [taskStatus, setTaskStatus] = useState<string | null>(null);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
-  const taskIdRef = useRef<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  // Cleanup polling on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
+      if (abortRef.current) abortRef.current.abort();
     };
-  }, []);
-
-  const pollTask = useCallback(async (taskId: string) => {
-    console.log(`Polling task ${taskId}...`);
-
-    try {
-      const res = await fetch(`/api/generate?taskId=${taskId}`);
-      const data = await res.json();
-
-      console.log('Poll result:', data.status, data.images?.length);
-
-      if (data.status === 'done' || data.status === 'error') {
-        // Stop polling
-        if (pollingRef.current) {
-          clearInterval(pollingRef.current);
-          pollingRef.current = null;
-        }
-
-        const newImages: GeneratedImage[] = data.images.map((img: { url: string; success: boolean; error?: string }) => ({
-          url: img.url,
-          prompt: data.prompt,
-          model: data.model,
-          loading: false,
-          error: img.success ? null : (img.error || 'Failed'),
-        }));
-
-        setImages(newImages);
-        setGlobalLoading(false);
-        setTaskStatus(null);
-
-        const successCount = newImages.filter(i => !i.error).length;
-        if (successCount === 0) {
-          setGlobalError('All generations failed');
-        }
-      } else {
-        setTaskStatus(`${data.status}...`);
-      }
-    } catch (err) {
-      console.error('Poll error:', err);
-    }
   }, []);
 
   const generate = useCallback(async () => {
@@ -91,15 +53,13 @@ export default function Home() {
       return;
     }
 
-    // Stop any existing polling
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
+    // Cancel any in-flight requests
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
 
     setGlobalLoading(true);
     setGlobalError(null);
-    setTaskStatus('pending...');
+    setTaskStatus('generating...');
 
     // Initialize loading state
     const initialImages: GeneratedImage[] = Array.from({ length: count }, () => ({
@@ -112,48 +72,82 @@ export default function Home() {
     setImages(initialImages);
 
     try {
-      console.log('Frontend: POST /api/generate');
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: prompt.trim(), model, count, width, height }),
+      console.log('Frontend: generating', count, 'image(s) directly via', API_URL);
+
+      // Fire all requests in parallel directly from browser
+      const promises = Array.from({ length: count }, () =>
+        fetch(API_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + API_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ prompt: prompt.trim(), model, width, height }),
+          signal: abortRef.current!.signal,
+        }).then(async (res) => {
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error('API ' + res.status + ': ' + text);
+          }
+          const blob = await res.blob();
+          return URL.createObjectURL(blob);
+        })
+      );
+
+      const results = await Promise.allSettled(promises);
+
+      const newImages: GeneratedImage[] = results.map((result) => {
+        if (result.status === 'fulfilled') {
+          return {
+            url: result.value,
+            prompt: prompt.trim(),
+            model,
+            loading: false,
+            error: null,
+          };
+        } else {
+          return {
+            url: '',
+            prompt: prompt.trim(),
+            model,
+            loading: false,
+            error: result.reason?.message || 'Failed',
+          };
+        }
       });
 
-      console.log('Frontend: response status:', response.status);
-      const data = await response.json();
-      console.log('Frontend:', JSON.stringify(data).substring(0, 200));
+      setImages(newImages);
+      setGlobalLoading(false);
+      setTaskStatus(null);
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Generation failed');
+      const successCount = newImages.filter(i => !i.error).length;
+      if (successCount === 0) {
+        setGlobalError('All generations failed');
       }
-
-      const taskId = data.taskId;
-      taskIdRef.current = taskId;
-      console.log('Frontend: taskId =', taskId);
-
-      // Start polling every 2 seconds
-      pollingRef.current = setInterval(() => {
-        pollTask(taskId);
-      }, 2000);
-
-      // Also poll immediately
-      setTimeout(() => pollTask(taskId), 500);
-
     } catch (err) {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
+      if (err instanceof Error && err.name === 'AbortError') {
+        console.log('Request aborted');
+        return;
       }
       setGlobalError(err instanceof Error ? err.message : 'Unknown error');
       setGlobalLoading(false);
       setTaskStatus(null);
       setImages([]);
     }
-  }, [prompt, model, count, pollTask]);
+  }, [prompt, model, count, width, height]);
 
   const regenerate = useCallback(() => {
     generate();
   }, [generate]);
+
+  const cancel = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    setGlobalLoading(false);
+    setTaskStatus(null);
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -162,7 +156,6 @@ export default function Home() {
     }
   };
 
-  const loadingCount = images.filter(i => i.loading).length;
   const successCount = images.filter(i => !i.loading && !i.error).length;
   const errorCount = images.filter(i => i.error).length;
 
@@ -265,20 +258,25 @@ export default function Home() {
             </div>
 
             {/* Generate Button */}
-            <button
-              onClick={generate}
-              disabled={globalLoading || !prompt.trim()}
-              className="px-8 py-3 bg-[var(--gradient)] text-white font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 min-w-[160px]"
-            >
-              {globalLoading ? (
+            {globalLoading ? (
+              <button
+                onClick={cancel}
+                className="px-8 py-3 bg-red-500/80 text-white font-semibold rounded-xl hover:bg-red-500 transition-all shadow-lg min-w-[160px]"
+              >
                 <span className="flex items-center gap-2">
                   <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                  {taskStatus || 'Generating...'}
+                  Cancel
                 </span>
-              ) : (
-                '✨ Generate'
-              )}
-            </button>
+              </button>
+            ) : (
+              <button
+                onClick={generate}
+                disabled={!prompt.trim()}
+                className="px-8 py-3 bg-[var(--gradient)] text-white font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 min-w-[160px]"
+              >
+                ✨ Generate
+              </button>
+            )}
           </div>
 
           {/* Error */}
