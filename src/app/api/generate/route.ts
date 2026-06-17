@@ -24,13 +24,15 @@ async function processTask(taskId: string, prompt: string, model: string, count:
   if (!task) return;
 
   task.status = 'processing';
-  console.log(`[${taskId}] Processing ${count} image(s), key=${API_KEY ? 'SET(' + API_KEY.substring(0,8) + '...)' : 'EMPTY'}`);
+  console.log(`[${taskId}] Processing ${count} image(s)`);
 
   try {
-    // Проверка наличия API_KEY
     if (!API_KEY) {
-      throw new Error('API_KEY is not configured. Please set IMAGE_API_KEY environment variable.');
+      throw new Error('API_KEY is not configured');
     }
+
+    console.log(`[${taskId}] Sending request to ${API_URL}`);
+    console.log(`[${taskId}] Payload:`, JSON.stringify({ prompt, model, width, height, count }));
 
     const promises = Array.from({ length: count }, () =>
       fetch(API_URL, {
@@ -58,109 +60,103 @@ async function processTask(taskId: string, prompt: string, model: string, count:
         console.log(`[${taskId}] Response status: ${response.status}`);
         console.log(`[${taskId}] Content-Type: ${response.headers.get('content-type')}`);
 
+        // ⚠️ ВАЖНО: ВСЕГДА читаем как ТЕКСТ, потом решаем что с ним делать
+        const rawText = await response.text();
+        console.log(`[${taskId}] RAW RESPONSE length:`, rawText.length);
+        console.log(`[${taskId}] RAW RESPONSE (first 500 chars):`, rawText.substring(0, 500));
+
         if (response.ok) {
-          const contentType = response.headers.get('content-type') || '';
           let imageData = null;
 
-          // Проверяем, что пришло - изображение или JSON
-          if (contentType.includes('image')) {
-            // Если API возвращает изображение напрямую
-            try {
-              const blob = await response.blob();
-              const arrayBuffer = await blob.arrayBuffer();
-              const base64 = Buffer.from(arrayBuffer).toString('base64');
-              const mimeType = contentType.split(';')[0] || 'image/png';
-              imageData = `data:${mimeType};base64,${base64}`;
-              console.log(`[${taskId}] Image received as blob, size: ${blob.size} bytes`);
-            } catch (error) {
-              console.error(`[${taskId}] Error processing blob:`, error);
+          // Пробуем распарсить как JSON
+          try {
+            const json = JSON.parse(rawText);
+            console.log(`[${taskId}] Parsed JSON keys:`, Object.keys(json));
+
+            // ИЩЕМ ИЗОБРАЖЕНИЕ В ЛЮБОМ ПОЛЕ
+            let base64String = null;
+
+            // Проверяем все возможные поля
+            const possibleFields = ['image', 'data', 'b64_json', 'output', 'result', 'images', 'url'];
+
+            for (const field of possibleFields) {
+              if (json[field]) {
+                console.log(`[${taskId}] Found field '${field}'`);
+
+                if (field === 'images' && Array.isArray(json[field]) && json[field].length > 0) {
+                  base64String = json[field][0];
+                  console.log(`[${taskId}] Got image from images array`);
+                  break;
+                } else if (field === 'output' && json[field].image) {
+                  base64String = json[field].image;
+                  console.log(`[${taskId}] Got image from output.image`);
+                  break;
+                } else if (field === 'result' && json[field].image) {
+                  base64String = json[field].image;
+                  console.log(`[${taskId}] Got image from result.image`);
+                  break;
+                } else if (typeof json[field] === 'string' && json[field].length > 100) {
+                  base64String = json[field];
+                  console.log(`[${taskId}] Got image from ${field}`);
+                  break;
+                }
+              }
+            }
+
+            // Если нашли строку, пробуем сделать из нее изображение
+            if (base64String && typeof base64String === 'string') {
+              // Чистим от префиксов
+              let clean = base64String;
+              if (clean.includes(';base64,')) {
+                clean = clean.split(';base64,')[1];
+              }
+              if (clean.startsWith('data:image')) {
+                imageData = clean;
+              } else {
+                imageData = `data:image/png;base64,${clean}`;
+              }
+
+              console.log(`[${taskId}] ✅ SUCCESS! Image data length: ${imageData.length}`);
+              console.log(`[${taskId}] First 50 chars:`, imageData.substring(0, 50));
+            } else {
+              // Если ничего не нашли, выводим ошибку
+              console.error(`[${taskId}] ❌ No image found. Full response:`, JSON.stringify(json));
               images.push({
                 url: '',
                 success: false,
-                error: `Failed to process image blob: ${error instanceof Error ? error.message : String(error)}`
+                error: `No image in response. Keys: ${Object.keys(json).join(', ')}`
               });
               continue;
             }
-          } else {
-            // Если API возвращает JSON
-            try {
-              const json = await response.json();
-              console.log(`[${taskId}] API Response:`, JSON.stringify(json).substring(0, 200));
-
-              // Пробуем разные форматы ответа
-              if (json.image) {
-                // Если в ответе есть поле image
-                imageData = json.image.startsWith('data:') ? json.image : `data:image/png;base64,${json.image}`;
-              } else if (json.data) {
-                // Если в ответе есть поле data
-                imageData = json.data.startsWith('data:') ? json.data : `data:image/png;base64,${json.data}`;
-              } else if (json.url) {
-                // Если в ответе URL на изображение
-                imageData = json.url;
-              } else if (json.b64_json) {
-                // Если в ответе есть поле b64_json (как у OpenAI)
-                imageData = `data:image/png;base64,${json.b64_json}`;
-              } else if (json.output && json.output.image) {
-                // Если в ответе есть output.image (как у некоторых API)
-                imageData = json.output.image.startsWith('data:') ? json.output.image : `data:image/png;base64,${json.output.image}`;
-              } else if (json.images && Array.isArray(json.images) && json.images.length > 0) {
-                // Если в ответе массив изображений
-                const firstImage = json.images[0];
-                imageData = firstImage.startsWith('data:') ? firstImage : `data:image/png;base64,${firstImage}`;
-              } else if (typeof json === 'string') {
-                // Если ответ - просто строка base64
-                imageData = `data:image/png;base64,${json}`;
-              } else {
-                // Если ничего не подошло - логируем ошибку
-                console.error(`[${taskId}] Unknown response format:`, json);
-                images.push({
-                  url: '',
-                  success: false,
-                  error: `Unknown response format. Keys: ${Object.keys(json).join(', ')}`
-                });
-                continue;
-              }
-            } catch (error) {
-              // Если JSON не парсится, пробуем прочитать как текст
-              try {
-                const text = await response.text();
-                console.log(`[${taskId}] Response as text (first 200 chars):`, text.substring(0, 200));
-
-                // Проверяем, может это base64 строка
-                if (text.length > 100 && !text.includes('<') && !text.includes('{')) {
-                  imageData = `data:image/png;base64,${text.trim()}`;
-                } else {
-                  images.push({
-                    url: '',
-                    success: false,
-                    error: `Invalid response format: ${text.substring(0, 100)}`
-                  });
-                  continue;
-                }
-              } catch (textError) {
-                images.push({
-                  url: '',
-                  success: false,
-                  error: `Failed to parse response: ${error instanceof Error ? error.message : String(error)}`
-                });
-                continue;
-              }
+          } catch (parseError) {
+            // Если это не JSON, пробуем как base64 строку
+            console.log(`[${taskId}] Not JSON, trying as base64 string`);
+            if (rawText.length > 100 && !rawText.includes('<')) {
+              imageData = `data:image/png;base64,${rawText.trim()}`;
+              console.log(`[${taskId}] Used as base64, length: ${rawText.length}`);
+            } else {
+              console.error(`[${taskId}] ❌ Invalid response format:`, rawText.substring(0, 200));
+              images.push({
+                url: '',
+                success: false,
+                error: `Invalid response: ${rawText.substring(0, 100)}`
+              });
+              continue;
             }
           }
 
           if (imageData) {
             images.push({ url: imageData, success: true });
-            console.log(`[${taskId}] Image processed successfully, data length: ${imageData.length}`);
+            console.log(`[${taskId}] ✅ Image ${images.length} ready`);
           } else {
-            images.push({ url: '', success: false, error: 'No image data received' });
+            images.push({ url: '', success: false, error: 'No image data' });
           }
         } else {
-          const errorText = await response.text();
-          console.error(`[${taskId}] API error: ${response.status}`, errorText);
+          console.error(`[${taskId}] API error: ${response.status}`, rawText);
           images.push({
             url: '',
             success: false,
-            error: `API ${response.status}: ${errorText}`
+            error: `API ${response.status}: ${rawText.substring(0, 100)}`
           });
         }
       } else {
@@ -177,10 +173,10 @@ async function processTask(taskId: string, prompt: string, model: string, count:
     task.status = images.some(i => i.success) ? 'done' : 'error';
 
     const successCount = images.filter(i => i.success).length;
-    console.log(`[${taskId}] Done: ${successCount}/${count} images successful`);
+    console.log(`[${taskId}] Done: ${successCount}/${count} images`);
 
     if (successCount === 0) {
-      console.error(`[${taskId}] All images failed. Errors:`, images.map(i => i.error).join('; '));
+      console.error(`[${taskId}] All failed:`, images.map(i => i.error).join('; '));
     }
 
   } catch (error) {
@@ -190,7 +186,7 @@ async function processTask(taskId: string, prompt: string, model: string, count:
       success: false,
       error: error instanceof Error ? error.message : String(error)
     }];
-    console.error(`[${taskId}] Fatal error:`, error instanceof Error ? error.message : String(error));
+    console.error(`[${taskId}] Fatal error:`, error);
   }
 }
 
@@ -241,12 +237,11 @@ export async function POST(request: NextRequest) {
       createdAt: Date.now(),
     });
 
-    // Запускаем обработку в фоне без await
     processTask(taskId, prompt.trim(), model, count, width, height);
 
     return NextResponse.json({ taskId, status: 'pending' });
   } catch (error) {
-    console.error('POST error:', error instanceof Error ? error.message : String(error));
+    console.error('POST error:', error);
     return NextResponse.json({
       error: 'Internal server error',
       details: error instanceof Error ? error.message : String(error)

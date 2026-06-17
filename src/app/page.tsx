@@ -18,7 +18,10 @@ interface GeneratedImage {
   error: string | null;
 }
 
-// УДАЛИ API_KEY ОТСЮДА! Он должен быть только на бекенде
+// ⚠️ УДАЛИ ЭТО ОТСЮДА! API_KEY ДОЛЖЕН БЫТЬ ТОЛЬКО НА БЕКЕНДЕ!
+// const API_URL = 'https://free-generate-image.den-fstack.workers.dev/';
+// const API_KEY = 'sk-a7e45c01313481522cf4dffe2c131980';
+
 const AVAILABLE_MODELS: Model[] = [
   { id: '@cf/stabilityai/stable-diffusion-xl-base-1.0', name: 'SDXL Base 1.0', description: 'Stable Diffusion XL — высокое качество', speed: 'Medium', quality: 'High' },
   { id: '@cf/black-forest-labs/flux-1-schnell', name: 'FLUX.1 Schnell', description: 'FLUX — быстрая генерация', speed: 'Fast', quality: 'High' },
@@ -26,7 +29,6 @@ const AVAILABLE_MODELS: Model[] = [
   { id: '@cf/lykon/dreamshaper-8-lcm', name: 'DreamShaper 8', description: 'Художественный стиль', speed: 'Fast', quality: 'Medium' },
 ];
 
-// Типы для ответа от нашего бекенда
 interface TaskResponse {
   taskId: string;
   status: 'pending' | 'processing' | 'done' | 'error';
@@ -58,6 +60,13 @@ export default function Home() {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Отладка - смотрим состояние prompt
+  useEffect(() => {
+    console.log('Prompt changed:', prompt);
+    console.log('Prompt trimmed:', prompt.trim());
+    console.log('Is empty:', !prompt.trim());
+  }, [prompt]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -66,7 +75,6 @@ export default function Home() {
     };
   }, []);
 
-  // Функция для опроса статуса задачи
   const pollTaskStatus = useCallback(async (id: string) => {
     try {
       const response = await fetch(`/api/generate?taskId=${id}`);
@@ -78,7 +86,6 @@ export default function Home() {
       console.log('Task status:', data.status);
 
       if (data.status === 'done' || data.status === 'error') {
-        // Задача завершена
         clearInterval(pollIntervalRef.current!);
         pollIntervalRef.current = null;
 
@@ -86,7 +93,6 @@ export default function Home() {
         setTaskStatus(null);
         setTaskId(null);
 
-        // Обновляем изображения
         const newImages: GeneratedImage[] = data.images.map((img) => ({
           url: img.success ? img.url : '',
           prompt: data.prompt,
@@ -102,22 +108,24 @@ export default function Home() {
           setGlobalError('All generations failed');
         }
       } else if (data.status === 'processing') {
-        // Обновляем статус
         setTaskStatus('processing...');
       }
     } catch (error) {
       console.error('Polling error:', error);
-      // Не останавливаем polling при ошибке, продолжаем попытки
     }
   }, []);
 
   const generate = useCallback(async () => {
+    console.log('Generate called!');
+    console.log('Prompt value:', prompt);
+    console.log('Prompt trimmed:', prompt.trim());
+
     if (!prompt.trim()) {
+      console.log('Prompt is empty, returning');
       setGlobalError('Please enter a prompt');
       return;
     }
 
-    // Очищаем предыдущие интервалы
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
@@ -128,7 +136,6 @@ export default function Home() {
     setTaskStatus('submitting...');
     setTaskId(null);
 
-    // Инициализируем состояние загрузки
     const initialImages: GeneratedImage[] = Array.from({ length: count }, () => ({
       url: '',
       prompt: prompt.trim(),
@@ -139,7 +146,8 @@ export default function Home() {
     setImages(initialImages);
 
     try {
-      // Отправляем запрос на наш бекенд
+      console.log('Sending request to /api/generate');
+
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: {
@@ -165,12 +173,10 @@ export default function Home() {
       setTaskId(data.taskId);
       setTaskStatus('processing...');
 
-      // Начинаем опрос статуса
       pollIntervalRef.current = setInterval(() => {
         pollTaskStatus(data.taskId);
       }, 2000);
 
-      // Первый опрос сразу
       setTimeout(() => pollTaskStatus(data.taskId), 500);
 
     } catch (err) {
@@ -206,9 +212,12 @@ export default function Home() {
   const successCount = images.filter(i => !i.loading && !i.error).length;
   const errorCount = images.filter(i => i.error).length;
 
+  // Отладка перед рендером
+  console.log('RENDER - Prompt:', prompt);
+  console.log('RENDER - Is disabled:', !prompt.trim());
+
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
       <header className="glass sticky top-0 z-50 px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <h1 className="text-2xl font-bold gradient-text">AI Image Generator</h1>
@@ -219,28 +228,30 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main */}
       <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-8">
-        {/* Input Section */}
         <div className="glass rounded-2xl p-6 mb-8 animate-fadeInUp">
-          {/* Prompt */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
               Describe your image
             </label>
             <textarea
               value={prompt}
-              onChange={e => setPrompt(e.target.value)}
+              onChange={e => {
+                console.log('Textarea onChange:', e.target.value);
+                setPrompt(e.target.value);
+              }}
               onKeyDown={handleKeyDown}
               placeholder="A futuristic city at sunset, flying cars, neon lights, cyberpunk style..."
               className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--purple)] resize-none transition-colors"
               rows={3}
             />
+            {/* Отладка - показываем состояние */}
+            <div className="mt-1 text-xs text-[var(--text-muted)]">
+              Current: "{prompt}" | Length: {prompt.length} | Trimmed: "{prompt.trim()}" | Empty: {!prompt.trim() ? 'YES' : 'NO'}
+            </div>
           </div>
 
-          {/* Controls Row */}
           <div className="flex flex-wrap gap-4 items-end">
-            {/* Model Selector */}
             <div className="flex-1 min-w-[200px]">
               <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
                 Model
@@ -258,7 +269,6 @@ export default function Home() {
               </select>
             </div>
 
-            {/* Count Selector */}
             <div className="min-w-[140px]">
               <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
                 Count
@@ -280,7 +290,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Size Selector */}
             <div className="min-w-[160px]">
               <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
                 Size
@@ -304,7 +313,6 @@ export default function Home() {
               </select>
             </div>
 
-            {/* Generate Button */}
             {globalLoading ? (
               <button
                 onClick={cancel}
@@ -319,14 +327,17 @@ export default function Home() {
               <button
                 onClick={generate}
                 disabled={!prompt.trim()}
-                className="px-8 py-3 bg-[var(--gradient)] text-white font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 min-w-[160px]"
+                className={`px-8 py-3 font-semibold rounded-xl transition-all min-w-[160px] ${
+                  !prompt.trim()
+                    ? 'bg-gray-600/30 text-gray-400 cursor-not-allowed'
+                    : 'bg-[var(--gradient)] text-white hover:opacity-90 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40'
+                }`}
               >
                 ✨ Generate
               </button>
             )}
           </div>
 
-          {/* Status */}
           {taskStatus && (
             <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl text-blue-400 text-sm flex items-center gap-2">
               <span className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
@@ -334,7 +345,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* Error */}
           {globalError && (
             <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
               ⚠️ {globalError}
@@ -342,10 +352,8 @@ export default function Home() {
           )}
         </div>
 
-        {/* Results */}
         {images.length > 0 && (
           <div className="animate-fadeInUp">
-            {/* Result Header */}
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-lg font-semibold text-[var(--text)]">
@@ -377,7 +385,6 @@ export default function Home() {
               )}
             </div>
 
-            {/* Image Grid */}
             <div className={`grid gap-4 ${
               images.length === 1 ? 'grid-cols-1 max-w-2xl' :
               images.length === 2 ? 'grid-cols-1 md:grid-cols-2' :
@@ -424,7 +431,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Empty State */}
         {images.length === 0 && !globalLoading && (
           <div className="text-center py-20">
             <div className="text-6xl mb-4">🎨</div>
@@ -438,7 +444,6 @@ export default function Home() {
         )}
       </main>
 
-      {/* Footer */}
       <footer className="glass px-6 py-4 text-center text-sm text-[var(--text-muted)]">
         AI Image Generator — Powered by Cloudflare Workers AI
       </footer>
