@@ -710,12 +710,13 @@ export default function Home() {
                         }}
                       />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                        <button
-                          onClick={() => downloadImage(img.url, idx)}
+                        <a
+                          href={img.url}
+                          download={`generated-${idx + 1}.png`}
                           className="px-4 py-2 bg-[var(--gradient)] text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
                         >
                           ⬇️ Download
-                        </button>
+                        </a>
                       </div>
                     </div>
                   )}
