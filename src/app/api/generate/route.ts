@@ -219,6 +219,7 @@ export async function POST(request: NextRequest) {
     const payload: Record<string, unknown> = {};
 
     if (isAgnes) {
+      console.log(`[${taskId}] Agnes payload:`, JSON.stringify({ model: 'agnes-image-2.1-flash', prompt: prompt.trim(), size, ratio }));
       payload.model = 'agnes-image-2.1-flash';
       payload.prompt = prompt.trim();
       payload.size = size;
