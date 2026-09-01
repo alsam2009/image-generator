@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const AGNES_API_URL = 'https://apihub.agnes-ai.com/v1/images/generations';
 const CF_API_URL = process.env.IMAGE_API_URL || 'https://free-generate-image.den-fstack.workers.dev/';
@@ -225,7 +225,6 @@ export async function POST(request: NextRequest) {
       payload.size = size;
       payload.ratio = ratio;
       payload.extra_body = { response_format: 'url' };
-      console.log(`[${taskId}] Agnes payload:`, JSON.stringify(payload));
     } else {
       payload.prompt = prompt.trim();
       payload.width = Math.min(2048, Math.max(256, Math.round(width / 64) * 64));
@@ -256,6 +255,10 @@ export async function POST(request: NextRequest) {
       model,
       createdAt: Date.now(),
     });
+
+    if (isAgnes) {
+      console.log(`[${taskId}] Agnes payload:`, JSON.stringify(payload));
+    }
 
     // Fire and forget - task continues in background
     processTask(taskId, prompt.trim(), model, count, payload, apiURL, apiKey);
