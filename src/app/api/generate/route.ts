@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 const AGNES_API_URL = 'https://apihub.agnes-ai.com/v1/images/generations';
 const CF_API_URL = process.env.IMAGE_API_URL || 'https://free-generate-image.den-fstack.workers.dev/';
@@ -12,10 +12,11 @@ const tasks = new Map();
 
 setInterval(() => {
   const now = Date.now();
+  // Remove old tasks after 10 minutes
   tasks.forEach((task, id) => {
-    if (now - task.createdAt > 300000) tasks.delete(id);
+    if (now - task.createdAt > 600000) tasks.delete(id);
   });
-}, 300000);
+}, 600000);
 
 function generateId() {
   return Math.random().toString(36).substring(2, 15);
@@ -254,6 +255,7 @@ export async function POST(request: NextRequest) {
       createdAt: Date.now(),
     });
 
+    // Fire and forget - task continues in background
     processTask(taskId, prompt.trim(), model, count, payload, apiURL, apiKey);
 
     return NextResponse.json({ taskId, status: 'pending' });
