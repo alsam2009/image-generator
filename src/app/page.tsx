@@ -327,6 +327,7 @@ export default function Home() {
   }, []);
 
   const successCount = images.filter(i => !i.loading && !i.error).length;
+  const errorCount = images.filter(i => i.error).length;
   const config = currentModel.hasAdvanced ? (ADVANCED_CONFIG[model] || null) : null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
