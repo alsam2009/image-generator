@@ -216,21 +216,25 @@ export default function Home() {
   const pollTaskStatus = useCallback(async (id: string) => {
     try {
       const response = await fetch(`/api/generate?taskId=${id}`);
-      
+
       // Stop polling on 404 or any error
       if (!response.ok) {
-        clearInterval(pollIntervalRef.current!);
-        pollIntervalRef.current = null;
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
         setGlobalLoading(false);
         setGlobalError(`Task not found (error ${response.status}). Try again.`);
         return;
       }
-      
+
       const data: TaskStatusResponse = await response.json();
 
       if (data.status === 'done' || data.status === 'error') {
-        clearInterval(pollIntervalRef.current!);
-        pollIntervalRef.current = null;
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
         setGlobalLoading(false);
 
         const newImages: GeneratedImage[] = data.images.map((img) => ({
@@ -248,8 +252,10 @@ export default function Home() {
     } catch (error) {
       console.error('Polling error:', error);
       // Stop on error
-      clearInterval(pollIntervalRef.current!);
-      pollIntervalRef.current = null;
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
       setGlobalLoading(false);
       setGlobalError('Generation failed. Please try again.');
     }
