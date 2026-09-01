@@ -224,7 +224,7 @@ export default function Home() {
           pollIntervalRef.current = null;
         }
         setGlobalLoading(false);
-        setGlobalError('Агнес занят. Попробуйте позже.');
+        setGlobalError('Генератор занят. Попробуйте позже.');
         return;
       }
 
