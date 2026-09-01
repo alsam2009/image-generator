@@ -220,13 +220,12 @@ export async function POST(request: NextRequest) {
     const payload: Record<string, unknown> = {};
 
     if (isAgnes) {
-      console.log(`[${taskId}] Agnes payload:`, JSON.stringify({ model: 'agnes-image-2.1-flash', prompt: prompt.trim(), size, ratio }));
-      console.log(`[${taskId}] Full payload:`, JSON.stringify(payload, null, 2));
       payload.model = 'agnes-image-2.1-flash';
       payload.prompt = prompt.trim();
       payload.size = size;
       payload.ratio = ratio;
       payload.extra_body = { response_format: 'url' };
+      console.log(`[${taskId}] Agnes payload:`, JSON.stringify(payload));
     } else {
       payload.prompt = prompt.trim();
       payload.width = Math.min(2048, Math.max(256, Math.round(width / 64) * 64));
