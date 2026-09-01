@@ -224,7 +224,7 @@ export default function Home() {
           pollIntervalRef.current = null;
         }
         setGlobalLoading(false);
-        setGlobalError(`Task not found (error ${response.status}). Try again.`);
+        setGlobalError('Генерация временно недоступна. Попробуйте позже.');
         return;
       }
 
