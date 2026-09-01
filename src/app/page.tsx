@@ -336,24 +336,6 @@ export default function Home() {
     }
   };
 
-  const downloadImage = async (url: string, filename: string) => {
-    try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = objectUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(objectUrl);
-    } catch (err) {
-      console.error('Download failed:', err);
-      window.open(url, '_blank');
-    }
-  };
-
   return (
     <div className="min-h-screen flex flex-col">
       <header className="glass sticky top-0 z-50 px-6 py-4">
@@ -681,12 +663,13 @@ export default function Home() {
                         }}
                       />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                        <button
-                          onClick={() => downloadImage(img.url, `generated-${idx + 1}.png`)}
+                        <a
+                          href={img.url}
+                          download={`generated-${idx + 1}.png`}
                           className="px-4 py-2 bg-[var(--gradient)] text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
                         >
                           ⬇️ Download
-                        </button>
+                        </a>
                       </div>
                     </div>
                   )}
