@@ -327,13 +327,31 @@ export default function Home() {
   }, []);
 
   const successCount = images.filter(i => !i.loading && !i.error).length;
-  const errorCount = images.filter(i => i.error).length;
+  const successCount = images.filter(i => !i.loading && !i.error).length;
   const config = currentModel.hasAdvanced ? (ADVANCED_CONFIG[model] || null) : null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       generate();
+    }
+  };
+
+  const downloadImage = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      console.error('Download failed:', err);
+      window.open(url, '_blank');
     }
   };
 
@@ -664,13 +682,12 @@ export default function Home() {
                         }}
                       />
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                        <a
-                          href={img.url}
-                          download={`generated-${idx + 1}.png`}
+                        <button
+                          onClick={() => downloadImage(img.url, `generated-${idx + 1}.png`)}
                           className="px-4 py-2 bg-[var(--gradient)] text-white rounded-xl font-medium hover:opacity-90 transition-opacity"
                         >
                           ⬇️ Download
-                        </a>
+                        </button>
                       </div>
                     </div>
                   )}
