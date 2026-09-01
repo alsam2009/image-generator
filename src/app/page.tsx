@@ -224,7 +224,7 @@ export default function Home() {
           pollIntervalRef.current = null;
         }
         setGlobalLoading(false);
-        setGlobalError('Генерация временно недоступна. Попробуйте позже.');
+        setGlobalError('Агнес занят. Попробуйте позже.');
         return;
       }
 
