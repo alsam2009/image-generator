@@ -65,6 +65,7 @@ async function processTask(
         console.log(`[${taskId}] Response status: ${response.status}`);
 
         const rawText = await response.text();
+        console.log(`[${taskId}] RAW RESPONSE:`, rawText.substring(0, 500));
         console.log(`[${taskId}] RAW RESPONSE length:`, rawText.length);
 
         if (response.ok) {
@@ -220,6 +221,7 @@ export async function POST(request: NextRequest) {
 
     if (isAgnes) {
       console.log(`[${taskId}] Agnes payload:`, JSON.stringify({ model: 'agnes-image-2.1-flash', prompt: prompt.trim(), size, ratio }));
+      console.log(`[${taskId}] Full payload:`, JSON.stringify(payload, null, 2));
       payload.model = 'agnes-image-2.1-flash';
       payload.prompt = prompt.trim();
       payload.size = size;
