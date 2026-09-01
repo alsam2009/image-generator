@@ -79,8 +79,24 @@ async function processTask(
             if (json.data && Array.isArray(json.data) && json.data.length > 0) {
               const firstItem = json.data[0];
               if (firstItem.url) {
-                imageData = firstItem.url;
-                console.log(`[${taskId}] Found URL: ${imageData}`);
+                console.log(`[${taskId}] Got URL from Agnes: ${firstItem.url.substring(0, 80)}...`);
+                // Fetch URL and convert to base64 for reliable download
+                try {
+                  const imgResponse = await fetch(firstItem.url);
+                  if (imgResponse.ok) {
+                    const arrayBuffer = await imgResponse.arrayBuffer();
+                    const base64 = Buffer.from(arrayBuffer).toString('base64');
+                    const contentType = imgResponse.headers.get('content-type') || 'image/png';
+                    imageData = `data:${contentType};base64,${base64}`;
+                    console.log(`[${taskId}] Converted to base64, length: ${imageData.length}`);
+                  } else {
+                    console.error(`[${taskId}] Failed to fetch image URL: ${imgResponse.status}`);
+                    imageData = firstItem.url; // Fallback to URL
+                  }
+                } catch (err) {
+                  console.error(`[${taskId}] Error fetching image:`, err);
+                  imageData = firstItem.url; // Fallback to URL
+                }
               } else if (firstItem.b64_json) {
                 imageData = `data:image/png;base64,${firstItem.b64_json}`;
                 console.log(`[${taskId}] Found Base64`);
