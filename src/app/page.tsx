@@ -216,7 +216,16 @@ export default function Home() {
   const pollTaskStatus = useCallback(async (id: string) => {
     try {
       const response = await fetch(`/api/generate?taskId=${id}`);
-      if (!response.ok) throw new Error(`Failed to get task status: ${response.status}`);
+      
+      // Stop polling on 404 or any error
+      if (!response.ok) {
+        clearInterval(pollIntervalRef.current!);
+        pollIntervalRef.current = null;
+        setGlobalLoading(false);
+        setGlobalError(`Task not found (error ${response.status}). Try again.`);
+        return;
+      }
+      
       const data: TaskStatusResponse = await response.json();
 
       if (data.status === 'done' || data.status === 'error') {
@@ -235,11 +244,14 @@ export default function Home() {
         setImages(newImages);
         const successCount = newImages.filter(i => !i.error).length;
         if (successCount === 0) setGlobalError('All generations failed');
-      } else if (data.status === 'processing') {
-        // keep loading
       }
     } catch (error) {
       console.error('Polling error:', error);
+      // Stop on error
+      clearInterval(pollIntervalRef.current!);
+      pollIntervalRef.current = null;
+      setGlobalLoading(false);
+      setGlobalError('Generation failed. Please try again.');
     }
   }, []);
 
@@ -308,6 +320,16 @@ export default function Home() {
 
       pollIntervalRef.current = setInterval(() => pollTaskStatus(data.taskId), 2000);
       setTimeout(() => pollTaskStatus(data.taskId), 500);
+      
+      // Auto-stop after 2 minutes to prevent hanging
+      setTimeout(() => {
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+          setGlobalLoading(false);
+          setGlobalError('Generation timed out. Please try again.');
+        }
+      }, 120000);
     } catch (err) {
       console.error('Generation error:', err);
       setGlobalError(err instanceof Error ? err.message : 'Unknown error');
