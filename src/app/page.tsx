@@ -8,6 +8,25 @@ interface Model {
   description: string;
   speed: string;
   quality: string;
+  hasAdvanced: boolean;
+  useSizeTier: boolean;
+}
+
+interface ModelAdvancedConfig {
+  negativePromptPlaceholder: string;
+  negativePromptHint: string;
+  stepsMin: number;
+  stepsMax: number;
+  stepsDefault: number;
+  stepsLabel: string;
+  stepsHint: string;
+  guidanceMin: number;
+  guidanceMax: number;
+  guidanceDefault: number;
+  guidanceLabel: string;
+  guidanceHint: string;
+  hasGuidance: boolean;
+  hasSeed: boolean;
 }
 
 interface GeneratedImage {
@@ -18,15 +37,119 @@ interface GeneratedImage {
   error: string | null;
 }
 
-// ⚠️ УДАЛИ ЭТО ОТСЮДА! API_KEY ДОЛЖЕН БЫТЬ ТОЛЬКО НА БЕКЕНДЕ!
-// const API_URL = 'https://free-generate-image.den-fstack.workers.dev/';
-// const API_KEY = 'sk-a7e45c01313481522cf4dffe2c131980';
-
 const AVAILABLE_MODELS: Model[] = [
-  { id: '@cf/stabilityai/stable-diffusion-xl-base-1.0', name: 'SDXL Base 1.0', description: 'Stable Diffusion XL — высокое качество', speed: 'Medium', quality: 'High' },
-  { id: '@cf/black-forest-labs/flux-1-schnell', name: 'FLUX.1 Schnell', description: 'FLUX — быстрая генерация', speed: 'Fast', quality: 'High' },
-  { id: '@cf/bytedance/stable-diffusion-xl-lightning', name: 'SDXL Lightning', description: 'Молниеносная генерация', speed: 'Very Fast', quality: 'Medium' },
-  { id: '@cf/lykon/dreamshaper-8-lcm', name: 'DreamShaper 8', description: 'Художественный стиль', speed: 'Fast', quality: 'Medium' },
+  { id: 'agnes-image-2.1-flash', name: 'Agnes Image 2.1 Flash', description: 'Высокое качество, сложные композиции', speed: 'Fast', quality: 'High', hasAdvanced: false, useSizeTier: true },
+  { id: '@cf/stabilityai/stable-diffusion-xl-base-1.0', name: 'SDXL Base 1.0', description: 'Stable Diffusion XL — высокое качество', speed: 'Medium', quality: 'High', hasAdvanced: true, useSizeTier: false },
+  { id: '@cf/bytedance/stable-diffusion-xl-lightning', name: 'SDXL Lightning', description: 'Молниеносная генерация', speed: 'Very Fast', quality: 'Medium', hasAdvanced: true, useSizeTier: false },
+  { id: '@cf/lykon/dreamshaper-8-lcm', name: 'DreamShaper 8', description: 'Художественный стиль', speed: 'Fast', quality: 'Medium', hasAdvanced: true, useSizeTier: false },
+];
+
+const ADVANCED_CONFIG: Record<string, ModelAdvancedConfig> = {
+  '@cf/stabilityai/stable-diffusion-xl-base-1.0': {
+    negativePromptPlaceholder: 'blurry, low quality, ugly...',
+    negativePromptHint: 'чего избегать',
+    stepsMin: 1,
+    stepsMax: 20,
+    stepsDefault: 20,
+    stepsLabel: 'Steps',
+    stepsHint: 'качество',
+    guidanceMin: 1,
+    guidanceMax: 15,
+    guidanceDefault: 7.5,
+    guidanceLabel: 'Guidance',
+    guidanceHint: 'следование промпту',
+    hasGuidance: true,
+    hasSeed: true,
+  },
+  '@cf/bytedance/stable-diffusion-xl-lightning': {
+    negativePromptPlaceholder: 'blurry, low quality, ugly...',
+    negativePromptHint: 'чего избегать',
+    stepsMin: 1,
+    stepsMax: 8,
+    stepsDefault: 4,
+    stepsLabel: 'Steps',
+    stepsHint: 'качество',
+    guidanceMin: 1,
+    guidanceMax: 15,
+    guidanceDefault: 7.5,
+    guidanceLabel: 'Guidance',
+    guidanceHint: 'следование промпту',
+    hasGuidance: true,
+    hasSeed: true,
+  },
+  '@cf/lykon/dreamshaper-8-lcm': {
+    negativePromptPlaceholder: 'blurry, low quality, distorted...',
+    negativePromptHint: 'чего избегать',
+    stepsMin: 1,
+    stepsMax: 20,
+    stepsDefault: 20,
+    stepsLabel: 'Steps',
+    stepsHint: 'качество',
+    guidanceMin: 1,
+    guidanceMax: 15,
+    guidanceDefault: 7.5,
+    guidanceLabel: 'Guidance',
+    guidanceHint: 'следование промпту',
+    hasGuidance: true,
+    hasSeed: true,
+  },
+};
+
+// Agnes size dimensions
+const AGNES_SIZES: Record<string, Record<string, string>> = {
+  '1K': {
+    '1:1': '1024×1024',
+    '3:4': '864×1152',
+    '4:3': '1152×864',
+    '16:9': '1312×736',
+    '9:16': '736×1312',
+    '2:3': '832×1248',
+    '3:2': '1248×832',
+    '21:9': '1568×672',
+  },
+  '2K': {
+    '1:1': '2048×2048',
+    '3:4': '1728×2304',
+    '4:3': '2304×1728',
+    '16:9': '2624×1472',
+    '9:16': '1472×2624',
+    '2:3': '1664×2496',
+    '3:2': '2496×1664',
+    '21:9': '3136×1344',
+  },
+  '3K': {
+    '1:1': '3072×3072',
+    '3:4': '2592×3456',
+    '4:3': '3456×2592',
+    '16:9': '3936×2208',
+    '9:16': '2208×3936',
+    '2:3': '2496×3744',
+    '3:2': '3744×2496',
+    '21:9': '4704×2016',
+  },
+  '4K': {
+    '1:1': '4096×4096',
+    '3:4': '3456×4608',
+    '4:3': '4608×3456',
+    '16:9': '5248×2944',
+    '9:16': '2944×5248',
+    '2:3': '3328×4992',
+    '3:2': '4992×3328',
+    '21:9': '6272×2688',
+  },
+};
+
+// Cloudflare size options
+const CLOUDFLARE_SIZES = [
+  { w: 512, h: 512, label: '512 × 512' },
+  { w: 768, h: 768, label: '768 × 768' },
+  { w: 1024, h: 1024, label: '1024 × 1024' },
+  { w: 1024, h: 768, label: '1024 × 768' },
+  { w: 768, h: 1024, label: '768 × 1024' },
+  { w: 1280, h: 720, label: '1280 × 720 (HD)' },
+  { w: 1920, h: 1080, label: '1920 × 1080 (Full HD)' },
+  { w: 2048, h: 1152, label: '2048 × 1152 (2K)' },
+  { w: 2048, h: 2048, label: '2048 × 2048 (Max)' },
 ];
 
 interface TaskResponse {
@@ -37,61 +160,69 @@ interface TaskResponse {
 interface TaskStatusResponse {
   taskId: string;
   status: 'pending' | 'processing' | 'done' | 'error';
-  images: Array<{
-    url: string;
-    success: boolean;
-    error?: string;
-  }>;
+  images: Array<{ url: string; success: boolean; error?: string }>;
   prompt: string;
   model: string;
 }
 
 export default function Home() {
   const [prompt, setPrompt] = useState('');
-  const [model, setModel] = useState(AVAILABLE_MODELS[1].id);
+  const [model, setModel] = useState('agnes-image-2.1-flash');
   const [count, setCount] = useState(1);
+  
+  // Agnes size options
+  const [sizeTier, setSizeTier] = useState('1K');
+  const [ratio, setRatio] = useState('1:1');
+  
+  // Cloudflare size options
   const [width, setWidth] = useState(1024);
   const [height, setHeight] = useState(1024);
+  
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [globalLoading, setGlobalLoading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
-  const [taskStatus, setTaskStatus] = useState<string | null>(null);
-  const [taskId, setTaskId] = useState<string | null>(null);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Отладка - смотрим состояние prompt
+  // Advanced settings state (only for Cloudflare models)
+  const [negativePrompt, setNegativePrompt] = useState('');
+  const [seed, setSeed] = useState<number | 'random'>('random');
+  const [steps, setSteps] = useState(20);
+  const [guidance, setGuidance] = useState(7.5);
+
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const currentModel = AVAILABLE_MODELS.find(m => m.id === model)!;
+
+  // Reset advanced settings when model changes
   useEffect(() => {
-    console.log('Prompt changed:', prompt);
-    console.log('Prompt trimmed:', prompt.trim());
-    console.log('Is empty:', !prompt.trim());
-  }, [prompt]);
+    if (currentModel.hasAdvanced) {
+      const config = ADVANCED_CONFIG[model] || ADVANCED_CONFIG[Object.keys(ADVANCED_CONFIG)[0]];
+      setNegativePrompt('');
+      setSeed('random');
+      setSteps(config.stepsDefault);
+      setGuidance(config.guidanceDefault);
+    }
+  }, [model]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (abortRef.current) abortRef.current.abort();
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
   }, []);
 
+  const getRandomSeed = () => Math.floor(Math.random() * 2147483647);
+
   const pollTaskStatus = useCallback(async (id: string) => {
     try {
       const response = await fetch(`/api/generate?taskId=${id}`);
-      if (!response.ok) {
-        throw new Error(`Failed to get task status: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`Failed to get task status: ${response.status}`);
       const data: TaskStatusResponse = await response.json();
-      console.log('Task status:', data.status);
 
       if (data.status === 'done' || data.status === 'error') {
         clearInterval(pollIntervalRef.current!);
         pollIntervalRef.current = null;
-
         setGlobalLoading(false);
-        setTaskStatus(null);
-        setTaskId(null);
 
         const newImages: GeneratedImage[] = data.images.map((img) => ({
           url: img.success ? img.url : '',
@@ -102,13 +233,10 @@ export default function Home() {
         }));
 
         setImages(newImages);
-
         const successCount = newImages.filter(i => !i.error).length;
-        if (successCount === 0) {
-          setGlobalError('All generations failed');
-        }
+        if (successCount === 0) setGlobalError('All generations failed');
       } else if (data.status === 'processing') {
-        setTaskStatus('processing...');
+        // keep loading
       }
     } catch (error) {
       console.error('Polling error:', error);
@@ -116,12 +244,7 @@ export default function Home() {
   }, []);
 
   const generate = useCallback(async () => {
-    console.log('Generate called!');
-    console.log('Prompt value:', prompt);
-    console.log('Prompt trimmed:', prompt.trim());
-
     if (!prompt.trim()) {
-      console.log('Prompt is empty, returning');
       setGlobalError('Please enter a prompt');
       return;
     }
@@ -133,8 +256,6 @@ export default function Home() {
 
     setGlobalLoading(true);
     setGlobalError(null);
-    setTaskStatus('submitting...');
-    setTaskId(null);
 
     const initialImages: GeneratedImage[] = Array.from({ length: count }, () => ({
       url: '',
@@ -145,21 +266,37 @@ export default function Home() {
     }));
     setImages(initialImages);
 
-    try {
-      console.log('Sending request to /api/generate');
+    let payload: Record<string, unknown>;
+    
+    if (currentModel.useSizeTier) {
+      // Agnes API format
+      payload = {
+        prompt: prompt.trim(),
+        model,
+        size: sizeTier,
+        ratio,
+        count,
+      };
+    } else {
+      // Cloudflare API format
+      payload = {
+        prompt: prompt.trim(),
+        model,
+        width,
+        height,
+        count,
+        negative_prompt: negativePrompt,
+        seed: seed === 'random' ? -1 : seed,
+        steps,
+        guidance_scale: guidance,
+      };
+    }
 
+    try {
       const response = await fetch('/api/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt: prompt.trim(),
-          model,
-          count,
-          width,
-          height,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -168,29 +305,18 @@ export default function Home() {
       }
 
       const data: TaskResponse = await response.json();
-      console.log('Task created:', data.taskId);
 
-      setTaskId(data.taskId);
-      setTaskStatus('processing...');
-
-      pollIntervalRef.current = setInterval(() => {
-        pollTaskStatus(data.taskId);
-      }, 2000);
-
+      pollIntervalRef.current = setInterval(() => pollTaskStatus(data.taskId), 2000);
       setTimeout(() => pollTaskStatus(data.taskId), 500);
-
     } catch (err) {
       console.error('Generation error:', err);
       setGlobalError(err instanceof Error ? err.message : 'Unknown error');
       setGlobalLoading(false);
-      setTaskStatus(null);
       setImages([]);
     }
-  }, [prompt, model, count, width, height, pollTaskStatus]);
+  }, [prompt, model, count, sizeTier, ratio, width, height, negativePrompt, seed, steps, guidance, currentModel, pollTaskStatus]);
 
-  const regenerate = useCallback(() => {
-    generate();
-  }, [generate]);
+  const regenerate = useCallback(() => { generate(); }, [generate]);
 
   const cancel = useCallback(() => {
     if (pollIntervalRef.current) {
@@ -198,9 +324,11 @@ export default function Home() {
       pollIntervalRef.current = null;
     }
     setGlobalLoading(false);
-    setTaskStatus(null);
-    setTaskId(null);
   }, []);
+
+  const successCount = images.filter(i => !i.loading && !i.error).length;
+  const errorCount = images.filter(i => i.error).length;
+  const config = currentModel.hasAdvanced ? (ADVANCED_CONFIG[model] || null) : null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -209,13 +337,6 @@ export default function Home() {
     }
   };
 
-  const successCount = images.filter(i => !i.loading && !i.error).length;
-  const errorCount = images.filter(i => i.error).length;
-
-  // Отладка перед рендером
-  console.log('RENDER - Prompt:', prompt);
-  console.log('RENDER - Is disabled:', !prompt.trim());
-
   return (
     <div className="min-h-screen flex flex-col">
       <header className="glass sticky top-0 z-50 px-6 py-4">
@@ -223,7 +344,7 @@ export default function Home() {
           <h1 className="text-2xl font-bold gradient-text">AI Image Generator</h1>
           <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
             <span className="inline-block w-2 h-2 rounded-full bg-[var(--green)] animate-pulse"></span>
-            Powered by Cloudflare Workers AI
+            Powered by {currentModel.useSizeTier ? 'Agnes AI' : 'Cloudflare Workers AI'}
           </div>
         </div>
       </header>
@@ -236,43 +357,30 @@ export default function Home() {
             </label>
             <textarea
               value={prompt}
-              onChange={e => {
-                console.log('Textarea onChange:', e.target.value);
-                setPrompt(e.target.value);
-              }}
+              onChange={e => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="A futuristic city at sunset, flying cars, neon lights, cyberpunk style..."
               className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--purple)] resize-none transition-colors"
               rows={3}
             />
-            {/* Отладка - показываем состояние */}
-            <div className="mt-1 text-xs text-[var(--text-muted)]">
-              Current: "{prompt}" | Length: {prompt.length} | Trimmed: "{prompt.trim()}" | Empty: {!prompt.trim() ? 'YES' : 'NO'}
-            </div>
           </div>
 
           <div className="flex flex-wrap gap-4 items-end">
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
-                Model
-              </label>
+            <div className="flex-1 min-w-[180px]">
+              <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Model</label>
               <select
                 value={model}
                 onChange={e => setModel(e.target.value)}
                 className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text)] focus:outline-none focus:border-[var(--purple)] transition-colors cursor-pointer"
               >
                 {AVAILABLE_MODELS.map(m => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
+                  <option key={m.id} value={m.id}>{m.name}</option>
                 ))}
               </select>
             </div>
 
             <div className="min-w-[140px]">
-              <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
-                Count
-              </label>
+              <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Count</label>
               <div className="flex gap-2">
                 {[1, 2, 3, 4].map(n => (
                   <button
@@ -290,58 +398,199 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="min-w-[160px]">
-              <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">
-                Size
-              </label>
-              <select
-                value={width + 'x' + height}
-                onChange={e => {
-                  const parts = e.target.value.split('x');
-                  setWidth(parseInt(parts[0]));
-                  setHeight(parseInt(parts[1]));
-                }}
-                className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text)] focus:outline-none focus:border-[var(--purple)] transition-colors cursor-pointer"
-              >
-                <option value="512x512">512 x 512</option>
-                <option value="768x768">768 x 768</option>
-                <option value="1024x1024">1024 x 1024</option>
-                <option value="1024x768">1024 x 768</option>
-                <option value="768x1024">768 x 1024</option>
-                <option value="1280x720">1280 x 720</option>
-                <option value="720x1280">720 x 1280</option>
-              </select>
-            </div>
+            {currentModel.useSizeTier ? (
+              <>
+                <div className="min-w-[80px]">
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Size</label>
+                  <select
+                    value={sizeTier}
+                    onChange={e => setSizeTier(e.target.value)}
+                    className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text)] focus:outline-none focus:border-[var(--purple)] transition-colors cursor-pointer"
+                  >
+                    {['1K', '2K', '3K', '4K'].map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
 
-            {globalLoading ? (
-              <button
-                onClick={cancel}
-                className="px-8 py-3 bg-red-500/80 text-white font-semibold rounded-xl hover:bg-red-500 transition-all shadow-lg min-w-[160px]"
-              >
-                <span className="flex items-center gap-2">
-                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                  Cancel
-                </span>
-              </button>
+                <div className="min-w-[80px]">
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Ratio</label>
+                  <select
+                    value={ratio}
+                    onChange={e => setRatio(e.target.value)}
+                    className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text)] focus:outline-none focus:border-[var(--purple)] transition-colors cursor-pointer"
+                  >
+                    {[
+                      { label: '1:1', value: '1:1' },
+                      { label: '3:4', value: '3:4' },
+                      { label: '4:3', value: '4:3' },
+                      { label: '16:9', value: '16:9' },
+                      { label: '9:16', value: '9:16' },
+                      { label: '2:3', value: '2:3' },
+                      { label: '3:2', value: '3:2' },
+                      { label: '21:9', value: '21:9' },
+                    ].map(r => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="min-w-[100px]">
+                  <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Dimensions</label>
+                  <div className="px-4 py-3 bg-[var(--bg)] border border-[var(--border)] rounded-xl text-[var(--text)] text-sm font-mono">
+                    {AGNES_SIZES[sizeTier]?.[ratio] || `${sizeTier} ${ratio}`}
+                  </div>
+                </div>
+              </>
             ) : (
-              <button
-                onClick={generate}
-                disabled={!prompt.trim()}
-                className={`px-8 py-3 font-semibold rounded-xl transition-all min-w-[160px] ${
-                  !prompt.trim()
-                    ? 'bg-gray-600/30 text-gray-400 cursor-not-allowed'
-                    : 'bg-[var(--gradient)] text-white hover:opacity-90 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40'
-                }`}
-              >
-                ✨ Generate
-              </button>
+              <div className="min-w-[180px]">
+                <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Size</label>
+                <select
+                  value={`${width}x${height}`}
+                  onChange={e => {
+                    const parts = e.target.value.split('x');
+                    setWidth(parseInt(parts[0]));
+                    setHeight(parseInt(parts[1]));
+                  }}
+                  className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-xl px-4 py-3 text-[var(--text)] focus:outline-none focus:border-[var(--purple)] transition-colors cursor-pointer"
+                >
+                  {CLOUDFLARE_SIZES.map(s => (
+                    <option key={`${s.w}x${s.h}`} value={`${s.w}x${s.h}`}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
             )}
+
+            <div className="flex items-center gap-2 ml-auto">
+              {currentModel.hasAdvanced && (
+                <button
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="px-4 py-3 bg-[var(--bg)] border border-[var(--border)] rounded-xl text-[var(--text-muted)] hover:border-[var(--purple)] transition-colors text-sm flex items-center gap-2"
+                >
+                  <span>▼</span>
+                  {showAdvanced ? 'Hide' : 'Advanced'}
+                </button>
+              )}
+
+              {globalLoading ? (
+                <button
+                  onClick={cancel}
+                  className="px-6 py-3 bg-red-500/80 text-white font-semibold rounded-xl hover:bg-red-500 transition-all"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    Cancel
+                  </span>
+                </button>
+              ) : (
+                <button
+                  onClick={generate}
+                  disabled={!prompt.trim()}
+                  className={`px-6 py-3 font-semibold rounded-xl transition-all ${
+                    !prompt.trim()
+                      ? 'bg-gray-600/30 text-gray-400 cursor-not-allowed'
+                      : 'bg-[var(--gradient)] text-white hover:opacity-90 shadow-lg shadow-purple-500/20'
+                  }`}
+                >
+                  ✨ Generate
+                </button>
+              )}
+            </div>
           </div>
 
-          {taskStatus && (
-            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl text-blue-400 text-sm flex items-center gap-2">
-              <span className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
-              {taskStatus} {taskId && `(Task: ${taskId})`}
+          {currentModel.hasAdvanced && showAdvanced && (
+            <div className="mt-4 p-4 bg-[var(--bg-card)] rounded-xl border border-[var(--border)]">
+              <div className="grid grid-cols-2 gap-6">
+                {/* Left column - Negative Prompt & Seed */}
+                <div className="space-y-4">
+                  {/* Negative Prompt */}
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">
+                      Negative Prompt — {config?.negativePromptHint || ''}
+                    </label>
+                    <input
+                      type="text"
+                      value={negativePrompt}
+                      onChange={e => setNegativePrompt(e.target.value)}
+                      placeholder={config?.negativePromptPlaceholder || ''}
+                      className="w-full bg-[var(--bg)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--purple)] transition-colors"
+                    />
+                  </div>
+
+                  {/* Seed */}
+                  {config?.hasSeed && (
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">
+                        Seed — воспроизводимость
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          value={seed === 'random' ? '' : seed}
+                          onChange={e => setSeed(e.target.value ? parseInt(e.target.value) : 'random')}
+                          placeholder="Random"
+                          className="flex-1 bg-[var(--bg)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--purple)] transition-colors"
+                        />
+                        <button
+                          onClick={() => setSeed(getRandomSeed())}
+                          className="px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-muted)] hover:border-[var(--purple)] hover:text-[var(--text)] transition-colors"
+                          title="Random Seed"
+                        >
+                          🎲 Random Seed
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right column - Steps & Guidance sliders in one row */}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Steps slider */}
+                    <div>
+                      <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">
+                        <span>{config?.stepsLabel}: {steps}</span>
+                        <span className="ml-1 text-xs opacity-70">— {config?.stepsHint}</span>
+                      </label>
+                      <input
+                        type="range"
+                        min={config?.stepsMin || 1}
+                        max={config?.stepsMax || 20}
+                        value={steps}
+                        onChange={e => setSteps(parseInt(e.target.value))}
+                        className="w-full h-2 bg-[var(--border)] rounded-lg appearance-none cursor-pointer accent-[var(--purple)]"
+                      />
+                      <div className="flex justify-between text-xs text-[var(--text-muted)] mt-1">
+                        <span>{config?.stepsMin}</span>
+                        <span>{config?.stepsMax}</span>
+                      </div>
+                    </div>
+
+                    {/* Guidance slider */}
+                    {config?.hasGuidance && (
+                      <div>
+                        <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">
+                          <span>{config?.guidanceLabel}: {guidance}</span>
+                          <span className="ml-1 text-xs opacity-70">— {config?.guidanceHint}</span>
+                        </label>
+                        <input
+                          type="range"
+                          min={config?.guidanceMin || 1}
+                          max={config?.guidanceMax || 15}
+                          step={0.5}
+                          value={guidance}
+                          onChange={e => setGuidance(parseFloat(e.target.value))}
+                          className="w-full h-2 bg-[var(--border)] rounded-lg appearance-none cursor-pointer accent-[var(--purple)]"
+                        />
+                        <div className="flex justify-between text-[10px] text-[var(--text-muted)] mt-1">
+                          <span>{config?.guidanceMin}</span>
+                          <span>{config?.guidanceMax}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -371,7 +620,7 @@ export default function Home() {
                 </h2>
                 {images[0]?.prompt && (
                   <p className="text-sm text-[var(--text-muted)]">
-                    &ldquo;{images[0].prompt}&rdquo; — {AVAILABLE_MODELS.find(m => m.id === model)?.name}
+                    "{images[0].prompt}" — {currentModel.name}
                   </p>
                 )}
               </div>
@@ -445,7 +694,7 @@ export default function Home() {
       </main>
 
       <footer className="glass px-6 py-4 text-center text-sm text-[var(--text-muted)]">
-        AI Image Generator — Powered by Cloudflare Workers AI
+        AI Image Generator — Powered by Agnes AI & Cloudflare Workers AI
       </footer>
     </div>
   );
