@@ -390,7 +390,7 @@ export default function Home() {
           <img src="/logo.png" alt="Logo" className="h-10 w-auto" />
           <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
             <span className="inline-block w-2 h-2 rounded-full bg-[var(--green)] animate-pulse"></span>
-            Powered by {currentModel.useSizeTier ? 'Agnes AI' : 'Cloudflare Workers AI'}
+            Powered by <a href="https://github.com/alsam2009" target="_blank" rel="noopener noreferrer" className="text-[var(--text)] hover:underline font-medium">alsam2009</a>
           </div>
         </div>
       </header>
@@ -740,7 +740,7 @@ export default function Home() {
       </main>
 
       <footer className="glass px-6 py-4 text-center text-sm text-[var(--text-muted)]">
-        AI Image Generator — Powered by Agnes AI & Cloudflare Workers AI
+        <a href="https://github.com/alsam2009" target="_blank" rel="noopener noreferrer" className="text-[var(--text)] hover:underline font-medium">alsam2009</a>
       </footer>
     </div>
   );
