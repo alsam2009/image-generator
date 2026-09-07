@@ -215,6 +215,8 @@ export async function POST(request: NextRequest) {
 
     // Determine if Agnes or Cloudflare
     const isAgnes = model === 'agnes-image-2.1-flash';
+    // Add @ prefix for Cloudflare Workers AI models
+    const cfModel = model.startsWith('cf/') ? `@${model}` : model;
     const apiURL = isAgnes ? AGNES_API_URL : CF_API_URL;
     const apiKey = isAgnes ? AGNES_API_KEY : CF_API_KEY;
 
@@ -245,7 +247,7 @@ export async function POST(request: NextRequest) {
       payload.prompt = prompt.trim();
       payload.width = Math.min(2048, Math.max(256, Math.round(width / 64) * 64));
       payload.height = Math.min(2048, Math.max(256, Math.round(height / 64) * 64));
-      payload.model = model;
+      payload.model = cfModel;
       
       if (negative_prompt && negative_prompt.trim()) {
         payload.negative_prompt = negative_prompt.trim();
