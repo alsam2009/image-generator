@@ -39,13 +39,13 @@ interface GeneratedImage {
 
 const AVAILABLE_MODELS: Model[] = [
   { id: 'agnes-image-2.1-flash', name: 'Agnes Image 2.1 Flash', description: 'Высокое качество, сложные композиции', speed: 'Fast', quality: 'High', hasAdvanced: false, useSizeTier: true },
-  { id: '@cf/stabilityai/stable-diffusion-xl-base-1.0', name: 'SDXL Base 1.0', description: 'Stable Diffusion XL — высокое качество', speed: 'Medium', quality: 'High', hasAdvanced: true, useSizeTier: false },
-  { id: '@cf/bytedance/stable-diffusion-xl-lightning', name: 'SDXL Lightning', description: 'Молниеносная генерация', speed: 'Very Fast', quality: 'Medium', hasAdvanced: true, useSizeTier: false },
-  { id: '@cf/lykon/dreamshaper-8-lcm', name: 'DreamShaper 8', description: 'Художественный стиль', speed: 'Fast', quality: 'Medium', hasAdvanced: true, useSizeTier: false },
+  { id: 'cf/stabilityai/stable-diffusion-xl-base-1.0', name: 'SDXL Base 1.0', description: 'Stable Diffusion XL — высокое качество', speed: 'Medium', quality: 'High', hasAdvanced: true, useSizeTier: false },
+  { id: 'cf/bytedance/stable-diffusion-xl-lightning', name: 'SDXL Lightning', description: 'Молниеносная генерация', speed: 'Very Fast', quality: 'Medium', hasAdvanced: true, useSizeTier: false },
+  { id: 'cf/lykon/dreamshaper-8-lcm', name: 'DreamShaper 8', description: 'Художественный стиль', speed: 'Fast', quality: 'Medium', hasAdvanced: true, useSizeTier: false },
 ];
 
 const ADVANCED_CONFIG: Record<string, ModelAdvancedConfig> = {
-  '@cf/stabilityai/stable-diffusion-xl-base-1.0': {
+  'cf/stabilityai/stable-diffusion-xl-base-1.0': {
     negativePromptPlaceholder: 'blurry, low quality, ugly...',
     negativePromptHint: 'чего избегать',
     stepsMin: 1,
@@ -61,7 +61,7 @@ const ADVANCED_CONFIG: Record<string, ModelAdvancedConfig> = {
     hasGuidance: true,
     hasSeed: true,
   },
-  '@cf/bytedance/stable-diffusion-xl-lightning': {
+  'cf/bytedance/stable-diffusion-xl-lightning': {
     negativePromptPlaceholder: 'blurry, low quality, ugly...',
     negativePromptHint: 'чего избегать',
     stepsMin: 1,
@@ -77,7 +77,7 @@ const ADVANCED_CONFIG: Record<string, ModelAdvancedConfig> = {
     hasGuidance: true,
     hasSeed: true,
   },
-  '@cf/lykon/dreamshaper-8-lcm': {
+  'cf/lykon/dreamshaper-8-lcm': {
     negativePromptPlaceholder: 'blurry, low quality, distorted...',
     negativePromptHint: 'чего избегать',
     stepsMin: 1,
