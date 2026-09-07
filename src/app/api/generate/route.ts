@@ -63,9 +63,20 @@ async function processTask(
       if (result.status === 'fulfilled') {
         const response = result.value;
         console.log(`[${taskId}] Response status: ${response.status}`);
+        console.log(`[${taskId}] Content-Type: ${response.headers.get('content-type')}`);
+
+        const contentType = response.headers.get('content-type') || '';
+
+        // Handle binary image responses (Cloudflare sometimes returns PNG directly)
+        if (contentType.startsWith('image/')) {
+          console.log(`[${taskId}] Received binary image`);
+          const arrayBuffer = await response.arrayBuffer();
+          const base64 = Buffer.from(arrayBuffer).toString('base64');
+          images.push({ url: `data:${contentType};base64,${base64}`, success: true });
+          continue;
+        }
 
         const rawText = await response.text();
-        console.log(`[${taskId}] RAW RESPONSE:`, rawText.substring(0, 500));
         console.log(`[${taskId}] RAW RESPONSE length:`, rawText.length);
 
         if (response.ok) {
@@ -145,17 +156,12 @@ async function processTask(
               });
             }
           } catch (parseError) {
-            console.log(`[${taskId}] Not JSON, trying as base64 string`);
-            if (rawText.length > 100 && !rawText.includes('<')) {
-              images.push({ url: `data:image/png;base64,${rawText.trim()}`, success: true });
-            } else {
-              console.error(`[${taskId}] Invalid response format:`, rawText.substring(0, 200));
-              images.push({
-                url: '',
-                success: false,
-                error: `Invalid response: ${rawText.substring(0, 100)}`
-              });
-            }
+            console.error(`[${taskId}] Not JSON, raw text:`, rawText.substring(0, 100));
+            images.push({
+              url: '',
+              success: false,
+              error: `Invalid response: ${rawText.substring(0, 100)}`
+            });
           }
         } else {
           console.error(`[${taskId}] API error: ${response.status}`, rawText);
