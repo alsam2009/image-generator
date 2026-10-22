@@ -247,6 +247,7 @@ export async function POST(request: NextRequest) {
       payload.size = size;
       payload.ratio = ratio;
       payload.extra_body = { response_format: 'url' };
+      payload.seed = Math.floor(Math.random() * 2147483647);
     } else {
       payload.prompt = prompt.trim();
       payload.width = Math.min(2048, Math.max(256, Math.round(width / 64) * 64));
