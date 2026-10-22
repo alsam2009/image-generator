@@ -38,7 +38,7 @@ interface GeneratedImage {
 }
 
 const AVAILABLE_MODELS: Model[] = [
-  { id: 'agnes-image-2.1-flash', name: 'Agnes Image 2.1 Flash', description: 'Высокое качество, сложные композиции', speed: 'Fast', quality: 'High', hasAdvanced: false, useSizeTier: true },
+  { id: 'agnes-image-2.5-flash', name: 'Agnes Image 2.5 Flash', description: 'Высокое качество, сложные композиции', speed: 'Fast', quality: 'High', hasAdvanced: false, useSizeTier: true },
   { id: '@cf/stabilityai/stable-diffusion-xl-base-1.0', name: 'SDXL Base 1.0', description: 'Stable Diffusion XL — высокое качество', speed: 'Medium', quality: 'High', hasAdvanced: true, useSizeTier: false },
   { id: '@cf/bytedance/stable-diffusion-xl-lightning', name: 'SDXL Lightning', description: 'Молниеносная генерация', speed: 'Very Fast', quality: 'Medium', hasAdvanced: true, useSizeTier: false },
   { id: '@cf/lykon/dreamshaper-8-lcm', name: 'DreamShaper 8', description: 'Художественный стиль', speed: 'Fast', quality: 'Medium', hasAdvanced: true, useSizeTier: false },
@@ -167,7 +167,7 @@ interface TaskStatusResponse {
 
 export default function Home() {
   const [prompt, setPrompt] = useState('');
-  const [model, setModel] = useState('agnes-image-2.1-flash');
+  const [model, setModel] = useState('agnes-image-2.5-flash');
   const [count, setCount] = useState(1);
   
   // Agnes size options

@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       prompt,
-      model = 'agnes-image-2.1-flash',
+      model = 'agnes-image-2.5-flash',
       count = 1,
       size = '1K',
       ratio = '1:1',
@@ -220,7 +220,7 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Determine if Agnes or Cloudflare
-    const isAgnes = model === 'agnes-image-2.1-flash';
+    const isAgnes = model === 'agnes-image-2.5-flash';
     const apiURL = isAgnes ? AGNES_API_URL : CF_API_URL;
     const apiKey = isAgnes ? AGNES_API_KEY : CF_API_KEY;
 
@@ -242,7 +242,7 @@ export async function POST(request: NextRequest) {
     const payload: Record<string, unknown> = {};
 
     if (isAgnes) {
-      payload.model = 'agnes-image-2.1-flash';
+      payload.model = 'agnes-image-2.5-flash';
       payload.prompt = prompt.trim();
       payload.size = size;
       payload.ratio = ratio;
